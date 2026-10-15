@@ -1,0 +1,52 @@
+schemaVersion: "1.0"
+id: "mariadb"
+name: "MariaDB"
+version: "11.4"
+updatePolicy:
+  line: "11.x"
+category: "datastore"
+publisher: "OpsKit"
+resources:
+  min:
+    memory: "256MB"
+    cpus: 0.25
+  recommended:
+    memory: "1GB"
+    cpus: 1.0
+description: "High-performance open-source relational database."
+tags:
+  - "database"
+  - "sql"
+  - "relational"
+  - "mariadb"
+  - "mysql"
+
+inputs:
+  database_name:
+    type: string
+    required: true
+    default: "opskit_db"
+    description: "Initial database name"
+
+compose:
+  services:
+    mariadb:
+      image: "mariadb:11.4"
+      restart: "always"
+      environment:
+        MARIADB_ROOT_PASSWORD: "${DATABASE_ROOT_PASSWORD}"
+        MARIADB_DATABASE: "${DATABASE_NAME}"
+        MARIADB_USER: "${DATABASE_USER}"
+        MARIADB_PASSWORD: "${DATABASE_PASSWORD}"
+      volumes:
+        - "mariadb_data:/var/lib/mysql"
+      networks:
+        - "internal"
+
+volumes:
+  mariadb_data:
+    name: "opskit_${DEPLOYMENT_NAME}_mariadb_data"
+
+networks:
+  internal:
+    name: "opskit_${DEPLOYMENT_NAME}_net"

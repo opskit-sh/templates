@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate YAML manifests
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 - <<'EOF'
+          import pathlib, sys, yaml
+          bad = []
+          for pattern in ("*.yaml", "*.yml"):
+              for p in pathlib.Path(".").rglob(pattern):
+                  try:
+                      yaml.safe_load(p.read_text())
+                  except Exception as e:
+                      bad.append(f"{p}: {e}")
+          if bad:
+              sys.exit("\n".join(bad))
+          print("all manifests parse")
+          EOF

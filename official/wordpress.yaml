@@ -1,0 +1,187 @@
+schemaVersion: "1.0"
+id: "wordpress"
+name: "WordPress"
+version: "6.7"
+updatePolicy:
+  line: "6.x"
+category: "app"
+publisher: "OpsKit"
+resources:
+  min:
+    memory: "512MB"
+    cpus: 0.5
+  recommended:
+    memory: "1GB"
+    cpus: 1.0
+description: "Production-ready WordPress with Apache and automated MariaDB datastore binding."
+tags:
+  - "cms"
+  - "php"
+  - "wordpress"
+  - "apache"
+
+inputs:
+  domain:
+    type: string
+    required: true
+    description: "Domain name for public exposure (e.g. blog.example.com)"
+  admin_email:
+    type: string
+    required: true
+    description: "WordPress administrator email address"
+  site_title:
+    type: string
+    required: false
+    default: "My WordPress Site"
+    description: "Title of your WordPress website"
+  admin_user:
+    type: string
+    required: false
+    default: "admin"
+    description: "WordPress administrator username"
+  admin_password:
+    type: string
+    required: false
+    description: "Custom admin password (leave empty to auto-generate secure secret)"
+  multisite:
+    type: string
+    required: false
+    default: "disabled"
+    description: "Multisite network mode: disabled, subdomain, or subdirectory"
+
+links:
+  database:
+    engine: "mariadb"
+    default: "dedicated"
+
+hostpaths:
+  - path: "config/.htaccess"
+    containerPath: "/var/www/html/.htaccess"
+    kind: "file"
+    editable: true
+    description: "Apache rewrite rules (.htaccess)"
+  - path: "content/themes"
+    containerPath: "/var/www/html/wp-content/themes"
+    kind: "directory"
+    description: "WordPress themes directory"
+  - path: "content/plugins"
+    containerPath: "/var/www/html/wp-content/plugins"
+    kind: "directory"
+    description: "WordPress plugins directory"
+  - path: "uploads"
+    containerPath: "/var/www/html/wp-content/uploads"
+    kind: "directory"
+    description: "WordPress media uploads directory"
+
+tools:
+  wp-cli:
+    service: "wordpress"
+    check: ["test", "-x", "/usr/local/bin/wp"]
+    # Official WP-CLI phar: https://make.wordpress.org/cli/handbook/guides/installing/
+    install:
+      - "sh"
+      - "-c"
+      - "curl -fsSL -o /usr/local/bin/wp https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && chmod +x /usr/local/bin/wp"
+    user: "0"
+
+# Management actions run as www-data (not root) so files WP-CLI creates stay owned by the web user.
+# Placeholders use {{name}} because Compose interpolates ${...} across the whole file.
+actions:
+  install:
+    description: "Run the WordPress installer (creates the site and admin account)"
+    service: "wordpress"
+    user: "www-data"
+    requires: ["wp-cli"]
+    inputs:
+      url:
+        description: "Site URL (e.g. https://blog.example.com)"
+        required: true
+      title:
+        description: "Site title"
+        default: "My WordPress Site"
+      admin_user:
+        description: "Administrator username"
+        default: "admin"
+      admin_password:
+        description: "Administrator password"
+        required: true
+        secret: true
+      admin_email:
+        description: "Administrator email"
+        required: true
+    command:
+      - "wp"
+      - "--path=/var/www/html"
+      - "core"
+      - "install"
+      - "--url={{url}}"
+      - "--title={{title}}"
+      - "--admin_user={{admin_user}}"
+      - "--admin_password={{admin_password}}"
+      - "--admin_email={{admin_email}}"
+      - "--skip-email"
+  info:
+    description: "Show WordPress core and database versions"
+    service: "wordpress"
+    user: "www-data"
+    requires: ["wp-cli"]
+    command: ["wp", "--path=/var/www/html", "core", "version", "--extra"]
+  reset-password:
+    description: "Reset a WordPress user's password"
+    service: "wordpress"
+    user: "www-data"
+    requires: ["wp-cli"]
+    inputs:
+      user:
+        description: "Username, email or ID"
+        default: "admin"
+      password:
+        description: "New password"
+        required: true
+        secret: true
+    command:
+      - "wp"
+      - "--path=/var/www/html"
+      - "user"
+      - "update"
+      - "{{user}}"
+      - "--user_pass={{password}}"
+  cache-purge:
+    description: "Flush the WordPress object cache"
+    service: "wordpress"
+    user: "www-data"
+    requires: ["wp-cli"]
+    command: ["wp", "--path=/var/www/html", "cache", "flush"]
+  wp:
+    description: "Run any WP-CLI command (arguments after --)"
+    service: "wordpress"
+    user: "www-data"
+    requires: ["wp-cli"]
+    passthrough: true
+    command: ["wp", "--path=/var/www/html"]
+
+compose:
+  services:
+    wordpress:
+      image: "wordpress:6.7-apache"
+      restart: "always"
+      environment:
+        WORDPRESS_DB_HOST: "${DATABASE_HOST}:3306"
+        WORDPRESS_DB_USER: "${DATABASE_USER}"
+        WORDPRESS_DB_PASSWORD: "${DATABASE_PASSWORD}"
+        WORDPRESS_DB_NAME: "${DATABASE_NAME}"
+        WORDPRESS_TABLE_PREFIX: "${WORDPRESS_TABLE_PREFIX:-wp_}"
+        WORDPRESS_ADMIN_USER: "${WORDPRESS_ADMIN_USER:-admin}"
+        WORDPRESS_ADMIN_PASSWORD: "${WORDPRESS_ADMIN_PASSWORD}"
+        WORDPRESS_CONFIG_EXTRA: "${WORDPRESS_CONFIG_EXTRA:-}"
+      volumes:
+        - "./config/.htaccess:/var/www/html/.htaccess"
+        - "./content/themes:/var/www/html/wp-content/themes"
+        - "./content/plugins:/var/www/html/wp-content/plugins"
+        - "./uploads:/var/www/html/wp-content/uploads"
+      networks:
+        - "internal"
+
+networks:
+  internal:
+    name: "opskit_${DEPLOYMENT_NAME}_net"

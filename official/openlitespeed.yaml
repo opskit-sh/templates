@@ -1,0 +1,74 @@
+schemaVersion: "1.0"
+id: "openlitespeed"
+name: "OpenLiteSpeed Web Server"
+version: "1.9.2"
+updatePolicy:
+  line: "1.x"
+category: "service"
+publisher: "OpsKit"
+resources:
+  min:
+    memory: "128MB"
+    cpus: 0.2
+  recommended:
+    memory: "512MB"
+    cpus: 0.5
+description: "Standalone OpenLiteSpeed HTTP/3 web server with LSPHP 8.4, WebAdmin GUI on port 7080, and event-driven architecture."
+tags:
+  - "webserver"
+  - "runtime"
+  - "http3"
+  - "lsphp"
+  - "openlitespeed"
+
+inputs:
+  domain:
+    type: string
+    required: false
+    description: "Primary domain name for virtual host"
+
+hostpaths:
+  - path: "config/vhost.conf"
+    containerPath: "/usr/local/lsws/conf/vhosts/localhost/vhconf.conf"
+    kind: "file"
+    editable: true
+    description: "Virtual host configuration directives"
+  - path: "html"
+    containerPath: "/var/www/vhosts/localhost/html"
+    kind: "directory"
+    description: "Web server document root"
+
+actions:
+  restart:
+    description: "Gracefully restart the OpenLiteSpeed web server"
+    service: "openlitespeed"
+    command: ["/usr/local/lsws/bin/lswsctrl", "restart"]
+  status:
+    description: "Check the status of the OpenLiteSpeed web server process"
+    service: "openlitespeed"
+    command: ["/usr/local/lsws/bin/lswsctrl", "status"]
+
+compose:
+  services:
+    openlitespeed:
+      image: "litespeedtech/openlitespeed:1.9.2-lsphp84"
+      restart: "always"
+      environment:
+        ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+      volumes:
+        - "./html:/var/www/vhosts/localhost/html"
+        - "./config/vhost.conf:/usr/local/lsws/conf/vhosts/localhost/vhconf.conf"
+        - "ols_conf:/usr/local/lsws/conf"
+        - "ols_admin_conf:/usr/local/lsws/admin/conf"
+      networks:
+        - "internal"
+
+volumes:
+  ols_conf:
+    name: "opskit_${DEPLOYMENT_NAME}_conf"
+  ols_admin_conf:
+    name: "opskit_${DEPLOYMENT_NAME}_admin_conf"
+
+networks:
+  internal:
+    name: "opskit_${DEPLOYMENT_NAME}_net"

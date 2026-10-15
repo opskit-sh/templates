@@ -1,0 +1,74 @@
+schemaVersion: "1.0"
+id: "reactive-resume"
+name: "Reactive Resume"
+version: "5.3"
+updatePolicy:
+  line: "5.x"
+category: "app"
+publisher: "OpsKit"
+resources:
+  min:
+    memory: "512MB"
+    cpus: 0.5
+  recommended:
+    memory: "1GB"
+    cpus: 1.0
+description: "Free and open-source resume builder with real-time editing, client-side PDF rendering, and automated PostgreSQL datastore binding."
+tags:
+  - "productivity"
+  - "resume"
+  - "cv"
+  - "builder"
+  - "reactive-resume"
+
+inputs:
+  domain:
+    type: string
+    required: true
+    description: "Domain name for Reactive Resume web interface (e.g. resume.example.com)"
+  auth_secret:
+    type: string
+    required: false
+    description: "Application authentication secret (auto-generated if omitted)"
+  disable_signups:
+    type: boolean
+    required: false
+    default: false
+    description: "Disable public new user registration"
+
+links:
+  database:
+    engine: "postgres"
+    default: "dedicated"
+
+hostpaths:
+  - path: "data"
+    containerPath: "/app/data"
+    kind: "directory"
+    description: "Persistent user profile uploads and local assets directory"
+
+compose:
+  services:
+    reactive-resume:
+      image: "amruthpillai/reactive-resume:v5.3.2"
+      restart: "always"
+      environment:
+        APP_URL: "https://${DOMAIN}"
+        PORT: "3000"
+        TZ: "Etc/UTC"
+        DATABASE_URL: "postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:5432/${DATABASE_NAME}"
+        AUTH_SECRET: "${AUTH_SECRET}"
+        FLAG_DISABLE_SIGNUPS: "${FLAG_DISABLE_SIGNUPS:-false}"
+      volumes:
+        - "./data:/app/data"
+      healthcheck:
+        test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+      networks:
+        - "internal"
+
+networks:
+  internal:
+    name: "opskit_${DEPLOYMENT_NAME}_net"

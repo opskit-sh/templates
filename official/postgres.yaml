@@ -1,0 +1,144 @@
+schemaVersion: "1.0"
+id: "postgres"
+name: "PostgreSQL"
+version: "17"
+updatePolicy:
+  line: "17.x"
+category: "datastore"
+publisher: "OpsKit"
+resources:
+  min:
+    memory: "256MB"
+    cpus: 0.25
+  recommended:
+    memory: "1GB"
+    cpus: 1.0
+description: "Production-grade PostgreSQL 17 with pgvector, PgBouncer connection pooling, PostgREST OpenAPI layer, and fine-grained performance tuning."
+tags:
+  - "database"
+  - "sql"
+  - "relational"
+  - "postgres"
+  - "pgvector"
+  - "pgbouncer"
+  - "postgrest"
+
+# Pinned sidecars tracking their own upstream lines, not the template version.
+pins:
+  pgbouncer: "v1.26.0-p0"
+  postgrest: "v16.4"
+
+inputs:
+  database_name:
+    type: string
+    required: true
+    default: "opskit_db"
+    description: "Initial database name"
+  enable_pgbouncer:
+    type: boolean
+    required: false
+    default: true
+    description: "Deploy PgBouncer connection pooler on port 6432"
+  enable_postgrest:
+    type: boolean
+    required: false
+    default: true
+    description: "Deploy PostgREST OpenAPI REST interface on port 3001"
+  pool_mode:
+    type: string
+    required: false
+    default: "transaction"
+    description: "PgBouncer connection pooling mode: transaction, session, or statement"
+  max_client_conn:
+    type: number
+    required: false
+    default: 500
+    description: "Maximum client connections multiplexed through PgBouncer"
+  default_pool_size:
+    type: number
+    required: false
+    default: 20
+    description: "Default server pool size per database"
+
+hostpaths:
+  - path: "config/postgresql.conf"
+    containerPath: "/etc/postgresql/postgresql.conf"
+    kind: "file"
+    editable: true
+    description: "PostgreSQL core engine tuning parameters (shared_buffers, work_mem, wal_level)"
+  - path: "config/pgbouncer.ini"
+    containerPath: "/etc/pgbouncer/pgbouncer.ini"
+    kind: "file"
+    editable: true
+    description: "PgBouncer connection pooling configuration"
+  - path: "init/01-extensions.sql"
+    containerPath: "/docker-entrypoint-initdb.d/01-extensions.sql"
+    kind: "file"
+    editable: true
+    description: "Startup SQL script to auto-enable pgvector, uuid-ossp, and pgcrypto extensions"
+
+compose:
+  services:
+    postgres:
+      image: "pgvector/pgvector:pg17"
+      restart: "always"
+      command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+      environment:
+        POSTGRES_DB: "${DATABASE_NAME}"
+        POSTGRES_USER: "${DATABASE_USER}"
+        POSTGRES_PASSWORD: "${DATABASE_PASSWORD}"
+        PGDATA: "/var/lib/postgresql/data/pgdata"
+      volumes:
+        - "postgres_data:/var/lib/postgresql/data"
+        - "./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro"
+        - "./init/01-extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro"
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      networks:
+        - "internal"
+
+    pgbouncer:
+      image: "edoburu/pgbouncer:v1.26.0-p0"
+      restart: "always"
+      environment:
+        DB_USER: "${DATABASE_USER}"
+        DB_PASSWORD: "${DATABASE_PASSWORD}"
+        DB_HOST: "postgres"
+        DB_NAME: "${DATABASE_NAME}"
+        POOL_MODE: "${POOL_MODE:-transaction}"
+        MAX_CLIENT_CONN: "${MAX_CLIENT_CONN:-500}"
+        DEFAULT_POOL_SIZE: "${DEFAULT_POOL_SIZE:-20}"
+        AUTH_TYPE: "scram-sha-256"
+      volumes:
+        - "./config/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro"
+      depends_on:
+        postgres:
+          condition: "service_healthy"
+      networks:
+        - "internal"
+
+    postgrest:
+      image: "postgrest/postgrest:v16.4"
+      restart: "always"
+      environment:
+        PGRST_DB_URI: "postgres://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:5432/${DATABASE_NAME}"
+        PGRST_DB_SCHEMAS: "public"
+        PGRST_DB_ANON_ROLE: "${DATABASE_USER}"
+        PGRST_JWT_SECRET: "${PGRST_JWT_SECRET}"
+        PGRST_SERVER_PORT: "3001"
+      depends_on:
+        postgres:
+          condition: "service_healthy"
+      networks:
+        - "internal"
+
+volumes:
+  postgres_data:
+    name: "opskit_${DEPLOYMENT_NAME}_pg_data"
+
+networks:
+  internal:
+    name: "opskit_${DEPLOYMENT_NAME}_net"

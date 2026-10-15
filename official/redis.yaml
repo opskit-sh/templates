@@ -1,0 +1,47 @@
+schemaVersion: "1.0"
+id: "redis"
+name: "Redis"
+version: "7.4"
+updatePolicy:
+  line: "7.x"
+category: "datastore"
+publisher: "OpsKit"
+resources:
+  min:
+    memory: "64MB"
+    cpus: 0.1
+  recommended:
+    memory: "256MB"
+    cpus: 0.5
+description: "In-memory data structure store used as a database, cache, and message broker."
+tags:
+  - "cache"
+  - "in-memory"
+  - "key-value"
+  - "redis"
+
+inputs:
+  require_pass:
+    type: boolean
+    required: false
+    default: true
+    description: "Require password authentication"
+
+compose:
+  services:
+    redis:
+      image: "redis:7.4-alpine"
+      restart: "always"
+      command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+      volumes:
+        - "redis_data:/data"
+      networks:
+        - "internal"
+
+volumes:
+  redis_data:
+    name: "opskit_${DEPLOYMENT_NAME}_redis_data"
+
+networks:
+  internal:
+    name: "opskit_${DEPLOYMENT_NAME}_net"

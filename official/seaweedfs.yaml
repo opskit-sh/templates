@@ -1,0 +1,72 @@
+schemaVersion: "1.0"
+id: "seaweedfs"
+name: "SeaweedFS"
+version: "3.99"
+updatePolicy:
+  line: "3.x"
+category: "datastore"
+publisher: "OpsKit"
+resources:
+  min:
+    memory: "128MB"
+    cpus: 0.2
+  recommended:
+    memory: "512MB"
+    cpus: 0.5
+description: "Ultra-fast distributed object store and POSIX file system with S3-compatible API, Filer, and minimal memory footprint (<50MB)."
+tags:
+  - "storage"
+  - "s3"
+  - "object-storage"
+  - "seaweedfs"
+  - "distributed"
+
+inputs:
+  s3_access_key:
+    type: string
+    required: false
+    description: "S3 API Access Key ID (auto-generated if omitted)"
+  s3_secret_key:
+    type: string
+    required: false
+    description: "S3 API Secret Access Key (auto-generated if omitted)"
+  default_bucket:
+    type: string
+    required: false
+    default: "default"
+    description: "Default S3 bucket created on initialization"
+
+hostpaths:
+  - path: "config/s3.json"
+    containerPath: "/etc/seaweedfs/s3.json"
+    kind: "file"
+    editable: true
+    description: "SeaweedFS S3 IAM identities, keys, and bucket permissions"
+  - path: "data"
+    containerPath: "/data"
+    kind: "directory"
+    description: "Persistent volume and metadata storage directory"
+
+compose:
+  services:
+    seaweedfs:
+      image: "chrislusf/seaweedfs:3.99"
+      restart: "always"
+      command: ["server", "-dir=/data", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-filer", "-ip.bind=0.0.0.0"]
+      environment:
+        WEED_S3_ACCESS_KEY: "${SEAWEEDFS_S3_ACCESS_KEY}"
+        WEED_S3_SECRET_KEY: "${SEAWEEDFS_S3_SECRET_KEY}"
+      volumes:
+        - "./data:/data"
+        - "./config/s3.json:/etc/seaweedfs/s3.json:ro"
+      healthcheck:
+        test: ["CMD", "weed", "version"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+      networks:
+        - "internal"
+
+networks:
+  internal:
+    name: "opskit_${DEPLOYMENT_NAME}_net"
