@@ -1,0 +1,81 @@
+schema_version: "1.1"
+id: nextcloud
+name: Nextcloud
+version: "31.0"
+category: storage
+description: "Self-hosted file sync and collaboration platform."
+
+services:
+  app:
+    image: "nextcloud:31-apache"
+    lifecycle: service
+    trigger: http
+    network: ingress
+    ingress_port: 80
+    resources:
+      memory: "512MiB"
+      cpus: 0.5
+    data_path: "/var/www/html"
+
+links:
+  database:
+    type: relational
+    required: true
+    supported_engines: ["postgres", "mariadb"]
+    default_engine: mariadb
+    default_mode: shared
+    env_mapping:
+      host: NEXTCLOUD_DB_HOST
+      name: NEXTCLOUD_DB_NAME
+      user: NEXTCLOUD_DB_USER
+      password: NEXTCLOUD_DB_PASSWORD
+
+tools:
+  occ:
+    binary: occ
+    container: app
+    run_as: www-data
+    workdir: /var/www/html
+    verify: ["occ", "status"]
+
+actions:
+  status:
+    title: "Show Installation Status"
+    description: "Reports the installed version and the installation state."
+    tool: occ
+    args: ["status"]
+    danger: false
+    category: diagnostics
+  maintenance_on:
+    title: "Enable Maintenance Mode"
+    description: "Locks the instance for maintenance work."
+    tool: occ
+    args: ["maintenance:mode", "--on"]
+    danger: true
+    category: maintenance
+  maintenance_off:
+    title: "Disable Maintenance Mode"
+    description: "Unlocks the instance after maintenance work."
+    tool: occ
+    args: ["maintenance:mode", "--off"]
+    danger: false
+    category: maintenance
+  db_indices:
+    title: "Add Missing Database Indices"
+    description: "Adds the missing indices to the database tables."
+    tool: occ
+    args: ["db:add-missing-indices"]
+    danger: false
+    category: database
+
+env:
+  NEXTCLOUD_ADMIN_USER:
+    description: "Administrator account created on first run."
+    type: string
+    default: admin
+    required: false
+  NEXTCLOUD_ADMIN_PASSWORD:
+    description: "Administrator account password created on first run."
+    type: secret
+    generate: random_base64_64
+    required: true

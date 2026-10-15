@@ -1,131 +1,87 @@
-schemaVersion: "1.0"
-id: "n8n"
-name: "n8n"
+schema_version: "1.1"
+id: n8n
+name: n8n
 version: "2.43"
-updatePolicy:
-  line: "2.x"
-category: "app"
-publisher: "OpsKit"
-resources:
-  min:
-    memory: "512MB"
-    cpus: 0.5
-  recommended:
-    memory: "1GB"
-    cpus: 1.0
-description: "Production workflow automation platform with PostgreSQL backend, horizontal worker scaling, webhook listener, and sandboxed task runners."
-tags:
-  - "automation"
-  - "workflow"
-  - "n8n"
-  - "low-code"
-  - "queue-mode"
+category: automation
+description: "Workflow automation platform with a web editor and a PostgreSQL backend."
 
-inputs:
-  domain:
-    type: string
-    required: true
-    description: "Domain name for n8n web interface"
-  execution_mode:
-    type: string
-    required: false
-    default: "regular"
-    description: "Execution architecture: regular (single container) or queue (horizontally scaled with Redis and workers)"
-  worker_replicas:
-    type: number
-    required: false
-    default: 1
-    description: "Number of worker container replicas when execution_mode is queue"
-  enable_webhook_worker:
-    type: boolean
-    required: false
-    default: false
-    description: "Deploy dedicated high-throughput webhook listener process (queue mode only)"
-  enable_task_runners:
-    type: boolean
-    required: false
-    default: false
-    description: "Deploy isolated task runner sidecar (n8nio/runners) for sandboxed Python and JavaScript execution"
-  memory_limit:
-    type: string
-    required: false
-    default: "2G"
-    description: "Maximum memory limit per n8n container (e.g. 1G, 2G, 4G)"
-  cpu_limit:
-    type: string
-    required: false
-    default: "2.0"
-    description: "Maximum CPU cores allocated per n8n container"
-  timezone:
-    type: string
-    required: false
-    default: "UTC"
-    description: "Timezone for scheduled workflow triggers (e.g. Europe/Berlin, America/New_York)"
-  prune_executions:
-    type: boolean
-    required: false
-    default: true
-    description: "Automatically prune past execution data to conserve disk space"
-  prune_max_age_hours:
-    type: number
-    required: false
-    default: 168
-    description: "Retention period in hours for execution history (default: 168h = 7 days)"
-  community_packages:
-    type: boolean
-    required: false
-    default: false
-    description: "Allow installing community npm nodes from web UI"
+services:
+  app:
+    image: "docker.n8n.io/n8nio/n8n:2.43.0"
+    lifecycle: service
+    trigger: http
+    network: ingress
+    ingress_port: 5678
+    resources:
+      memory: "512MiB"
+      cpus: 0.5
+    data_path: "/home/node/.n8n"
 
 links:
   database:
-    engine: "postgres"
-    default: "dedicated"
-  redis:
-    engine: "redis"
-    default: "dedicated"
+    type: relational
+    required: true
+    supported_engines: ["postgres"]
+    default_engine: postgres
+    default_mode: dedicated
+    env_mapping:
+      host: DB_POSTGRESDB_HOST
+      name: DB_POSTGRESDB_DATABASE
+      user: DB_POSTGRESDB_USER
+      password: DB_POSTGRESDB_PASSWORD
+  queue:
+    type: key_value
+    required: false
+    supported_engines: ["redis"]
+    default_engine: redis
+    default_mode: dedicated
+    env_mapping:
+      host: QUEUE_BULL_REDIS_HOST
+      password: QUEUE_BULL_REDIS_PASSWORD
 
-hostpaths:
-  - path: "data"
-    containerPath: "/home/node/.n8n"
-    kind: "directory"
-    description: "n8n workflow database, encryption keys, and internal state"
-  - path: "files"
-    containerPath: "/files"
-    kind: "directory"
-    description: "Local shared disk files for Read/Write Files from Disk workflow nodes"
-
-compose:
-  services:
-    n8n:
-      image: "docker.n8n.io/n8nio/n8n:2.43.0"
-      restart: "always"
-      environment:
-        N8N_HOST: "${DOMAIN}"
-        N8N_PORT: "5678"
-        N8N_PROTOCOL: "https"
-        NODE_ENV: "production"
-        WEBHOOK_URL: "https://${DOMAIN}/"
-        N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
-        N8N_RESTRICT_FILE_ACCESS_TO: "/files"
-        GENERIC_TIMEZONE: "${TIMEZONE:-UTC}"
-        TZ: "${TIMEZONE:-UTC}"
-        EXECUTIONS_DATA_PRUNE: "${EXECUTIONS_DATA_PRUNE:-true}"
-        EXECUTIONS_DATA_MAX_AGE: "${EXECUTIONS_DATA_MAX_AGE:-168}"
-        N8N_COMMUNITY_PACKAGES_ENABLED: "${N8N_COMMUNITY_PACKAGES_ENABLED:-false}"
-        DB_TYPE: "postgresdb"
-        DB_POSTGRESDB_HOST: "${DATABASE_HOST}"
-        DB_POSTGRESDB_PORT: "5432"
-        DB_POSTGRESDB_DATABASE: "${DATABASE_NAME}"
-        DB_POSTGRESDB_USER: "${DATABASE_USER}"
-        DB_POSTGRESDB_PASSWORD: "${DATABASE_PASSWORD}"
-        N8N_ENCRYPTION_KEY: "${N8N_ENCRYPTION_KEY}"
-      volumes:
-        - "./data:/home/node/.n8n"
-        - "./files:/files"
-      networks:
-        - "internal"
-
-networks:
-  internal:
-    name: "opskit_${DEPLOYMENT_NAME}_net"
+env:
+  N8N_ENCRYPTION_KEY:
+    description: "Key that encrypts saved workflow credentials."
+    type: secret
+    generate: random_base64_64
+    required: true
+  DB_TYPE:
+    description: "Database driver n8n uses for its backend."
+    type: string
+    default: postgresdb
+    required: true
+  NODE_ENV:
+    description: "Node process environment."
+    type: string
+    default: production
+    required: false
+  GENERIC_TIMEZONE:
+    description: "Timezone for scheduled workflow triggers (IANA name, e.g. Europe/Berlin)."
+    type: string
+    default: UTC
+    required: false
+  TZ:
+    description: "Process timezone (IANA name)."
+    type: string
+    default: UTC
+    required: false
+  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS:
+    description: "Restrict the settings file to its owning user."
+    type: boolean
+    default: true
+    required: false
+  N8N_COMMUNITY_PACKAGES_ENABLED:
+    description: "Allow installing community nodes from the editor."
+    type: boolean
+    default: false
+    required: false
+  EXECUTIONS_DATA_PRUNE:
+    description: "Prune past execution data automatically."
+    type: boolean
+    default: true
+    required: false
+  EXECUTIONS_DATA_MAX_AGE:
+    description: "Retention period in hours for execution history."
+    type: number
+    default: 168
+    required: false

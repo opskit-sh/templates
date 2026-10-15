@@ -1,16 +1,13 @@
 {
   "$comment": "Browse index for the official catalog: exactly one entry per official manifest.",
   "templates": [
-    { "id": "laravel-ols", "file": "official/laravel-ols.yaml" },
     { "id": "mariadb", "file": "official/mariadb.yaml" },
     { "id": "n8n", "file": "official/n8n.yaml" },
-    { "id": "nextcloud-ols", "file": "official/nextcloud-ols.yaml" },
-    { "id": "openlitespeed", "file": "official/openlitespeed.yaml" },
+    { "id": "nextcloud", "file": "official/nextcloud.yaml" },
     { "id": "postgres", "file": "official/postgres.yaml" },
     { "id": "reactive-resume", "file": "official/reactive-resume.yaml" },
     { "id": "redis", "file": "official/redis.yaml" },
     { "id": "seaweedfs", "file": "official/seaweedfs.yaml" },
-    { "id": "wordpress-ols", "file": "official/wordpress-ols.yaml" },
     { "id": "wordpress", "file": "official/wordpress.yaml" }
   ]
 }
