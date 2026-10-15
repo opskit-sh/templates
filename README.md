@@ -29,9 +29,12 @@ Manifests carry no internal update machinery.
 
 ## Contributing
 
+The template-authoring quickstart lives in [CONTRIBUTING.md](CONTRIBUTING.md).
 Pull requests that add or change an official manifest keep the catalog gates: a
-valid manifest schema, non-root execution for every service, and multi-arch
-images.
+valid 1.1 manifest schema, non-root execution for every service, multi-arch
+images (amd64 and arm64), one manifest per deployable id, no variant forks
+(runtime variety ships inside one manifest as stacks), and no generic framework
+skeletons.
 
 ## License
 
