@@ -1,13 +1,13 @@
 schema_version: "1.1"
 id: nextcloud
 name: Nextcloud
-version: "31.0"
+version: "34.0.5"
 category: storage
 description: "Self-hosted file sync and collaboration platform."
 
 services:
   app:
-    image: "nextcloud:31-apache"
+    image: "nextcloud:34.0.5-apache"
     lifecycle: service
     trigger: http
     network: ingress

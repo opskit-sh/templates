@@ -1,19 +1,19 @@
 schema_version: "1.1"
 id: n8n
 name: n8n
-version: "2.43"
+version: "2.43.5"
 category: automation
 description: "Workflow automation platform with a web editor and a PostgreSQL backend."
 
 services:
   app:
-    image: "docker.n8n.io/n8nio/n8n:2.43.0"
+    image: "docker.n8n.io/n8nio/n8n:2.43.5"
     lifecycle: service
     trigger: http
     network: ingress
     ingress_port: 5678
     resources:
-      memory: "512MiB"
+      memory: "1GiB"
       cpus: 0.5
     data_path: "/home/node/.n8n"
 

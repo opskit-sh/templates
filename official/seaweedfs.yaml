@@ -1,13 +1,13 @@
 schema_version: "1.1"
 id: seaweedfs
 name: SeaweedFS
-version: "3.99"
+version: "4.48"
 category: datastore
 description: "Distributed object store with an S3-compatible API and a Filer."
 
 services:
   server:
-    image: "chrislusf/seaweedfs:3.99"
+    image: "chrislusf/seaweedfs:4.48"
     lifecycle: stateful
     state: persistent
     storage: persistent

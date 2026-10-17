@@ -1,13 +1,13 @@
 schema_version: "1.1"
 id: redis
 name: Redis
-version: "7.4"
+version: "7.4.11"
 category: datastore
 description: "In-memory data structure store used as a database, cache, and message broker."
 
 services:
   db:
-    image: "redis:7.4-alpine"
+    image: "redis:7.4.11-alpine"
     lifecycle: stateful
     state: persistent
     storage: persistent
