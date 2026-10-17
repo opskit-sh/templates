@@ -1,13 +1,13 @@
 schema_version: "1.1"
 id: postgres
 name: PostgreSQL
-version: "17.2"
+version: "17.11"
 category: datastore
 description: "Relational database engine."
 
 services:
   db:
-    image: "postgres:17-alpine"
+    image: "postgres:17.11-alpine"
     lifecycle: stateful
     state: persistent
     storage: persistent

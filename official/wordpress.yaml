@@ -21,7 +21,7 @@ stacks:
           resources:
             memory: "512MiB"
             cpus: 1.0
-          data_path: "/var/www/html"
+          data_path: "/var/www/vhosts/localhost/html"
     lemp:
       name: "Nginx + PHP-FPM"
       description: "Traditional Nginx reverse proxy with PHP-FPM."
@@ -29,9 +29,7 @@ stacks:
         app:
           image: "wordpress:6.7.1-fpm-alpine"
           lifecycle: service
-          trigger: http
-          network: ingress
-          ingress_port: 80
+          network: internal
           resources:
             memory: "512MiB"
             cpus: 1.0

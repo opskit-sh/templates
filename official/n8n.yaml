@@ -29,15 +29,6 @@ links:
       name: DB_POSTGRESDB_DATABASE
       user: DB_POSTGRESDB_USER
       password: DB_POSTGRESDB_PASSWORD
-  queue:
-    type: key_value
-    required: false
-    supported_engines: ["redis"]
-    default_engine: redis
-    default_mode: dedicated
-    env_mapping:
-      host: QUEUE_BULL_REDIS_HOST
-      password: QUEUE_BULL_REDIS_PASSWORD
 
 env:
   N8N_ENCRYPTION_KEY:

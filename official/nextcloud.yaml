@@ -21,14 +21,14 @@ links:
   database:
     type: relational
     required: true
-    supported_engines: ["postgres", "mariadb"]
-    default_engine: mariadb
+    supported_engines: ["postgres"]
+    default_engine: postgres
     default_mode: shared
     env_mapping:
-      host: NEXTCLOUD_DB_HOST
-      name: NEXTCLOUD_DB_NAME
-      user: NEXTCLOUD_DB_USER
-      password: NEXTCLOUD_DB_PASSWORD
+      host: POSTGRES_HOST
+      name: POSTGRES_DB
+      user: POSTGRES_USER
+      password: POSTGRES_PASSWORD
 
 tools:
   occ:

@@ -36,6 +36,11 @@ env:
     type: secret
     generate: random_base64_64
     required: true
+  ENCRYPTION_SECRET:
+    description: "Secret that encrypts saved AI agent workspace data."
+    type: secret
+    generate: random_base64_64
+    required: true
   FLAG_DISABLE_SIGNUPS:
     description: "Disable public new user registration."
     type: boolean
