@@ -15,6 +15,11 @@ services:
     resources:
       memory: "256MiB"
     data_path: "/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 env:
   POSTGRES_PASSWORD:

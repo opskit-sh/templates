@@ -16,3 +16,9 @@ services:
       memory: "128MiB"
       cpus: 0.2
     data_path: "/data"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8888"]
+      start_period: 10s
+      interval: 30s
+      timeout: 10s
+      retries: 3

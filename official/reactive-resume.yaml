@@ -16,6 +16,12 @@ services:
       memory: "512MiB"
       cpus: 0.5
     data_path: "/app/data"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
+      start_period: 10s
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 links:
   database:

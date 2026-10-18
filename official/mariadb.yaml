@@ -16,6 +16,11 @@ services:
       memory: "256MiB"
       cpus: 0.25
     data_path: "/var/lib/mysql"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 env:
   MARIADB_ROOT_PASSWORD:
