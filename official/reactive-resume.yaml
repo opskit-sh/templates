@@ -1,13 +1,13 @@
 schema_version: "1.1"
 id: reactive-resume
 name: Reactive Resume
-version: "5.3"
+version: "6.0.3"
 category: cms
 description: "Self-hosted resume builder with real-time editing and client-side PDF rendering."
 
 services:
   app:
-    image: "amruthpillai/reactive-resume:v5.3.2"
+    image: "amruthpillai/reactive-resume:v6.0.3"
     lifecycle: service
     trigger: http
     network: ingress
@@ -29,14 +29,35 @@ links:
     required: true
     supported_engines: ["postgres"]
     default_engine: postgres
-    default_mode: dedicated
+    default_mode: shared
     env_mapping:
-      host: DATABASE_HOST
-      name: DATABASE_NAME
-      user: DATABASE_USER
-      password: DATABASE_PASSWORD
+      DATABASE_URL: {url: "postgresql://{user}:{password}@{host}:5432/{name}"}
+  queue:
+    type: key_value
+    required: true
+    supported_engines: ["redis"]
+    default_engine: redis
+    default_mode: shared
+    env_mapping:
+      REDIS_URL: {url: "redis://{host}:6379"}
+  storage:
+    type: object_storage
+    required: true
+    supported_engines: ["seaweedfs"]
+    default_engine: seaweedfs
+    default_mode: shared
+    env_mapping:
+      S3_ENDPOINT: {url: "http://{host}:8333"}
+      access_key: S3_ACCESS_KEY_ID
+      secret_key: S3_SECRET_ACCESS_KEY
+      bucket: S3_BUCKET
 
 env:
+  APP_URL:
+    description: "Public URL where the app is served, used for auth callbacks and absolute upload URLs."
+    type: string
+    deployment_url: true
+    required: true
   AUTH_SECRET:
     description: "Secret that signs authentication tokens."
     type: secret
@@ -47,6 +68,16 @@ env:
     type: secret
     generate: random_base64_64
     required: true
+  S3_REGION:
+    description: "Region of the S3-compatible object storage endpoint."
+    type: string
+    default: "us-east-1"
+    required: false
+  S3_FORCE_PATH_STYLE:
+    description: "Use path-style S3 requests, with the bucket in the path rather than the hostname."
+    type: boolean
+    default: true
+    required: false
   FLAG_DISABLE_SIGNUPS:
     description: "Disable public new user registration."
     type: boolean

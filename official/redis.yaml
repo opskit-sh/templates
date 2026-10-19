@@ -16,6 +16,7 @@ services:
       memory: "64MiB"
       cpus: 0.1
     data_path: "/data"
+    command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       start_period: 5s
