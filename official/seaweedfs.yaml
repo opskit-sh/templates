@@ -1,3 +1,9 @@
+# SeaweedFS in its all-in-one server shape: the master, volume, and
+# filer services plus the S3 gateway, the single-host deployment
+# SeaweedFS documents
+# (https://github.com/seaweedfs/seaweedfs/wiki/Docker-Compose-for-S3).
+# The image's entrypoint dispatches the first command argument, so the
+# command names the `server` subcommand without the `weed` binary.
 schema_version: "1.1"
 id: seaweedfs
 name: SeaweedFS
@@ -16,9 +22,48 @@ services:
       memory: "128MiB"
       cpus: 0.2
     data_path: "/data"
+    # `-s3` starts the S3-compatible API server beside the filer
+    # (https://github.com/seaweedfs/seaweedfs/wiki/Amazon-S3-API). The
+    # gateway seeds its identity from the AWS_ACCESS_KEY_ID and
+    # AWS_SECRET_ACCESS_KEY environment variables when no S3
+    # configuration file exists — the deployment platform writes that
+    # pair into the instance's environment at creation, under the
+    # names the recipe below declares.
+    # `-master.volumeSizeLimitMB` caps each volume's size, bounding the
+    # disk the volume server allocates per growth cycle on a shared
+    # node: the documented default is 30720 MB (`weed master -h`:
+    # "Master stops directing writes to oversized volumes"), and the
+    # image entrypoint passes 1024 MB — the later flag wins.
+    command: server -dir=/data -s3 -master.volumeSizeLimitMB=64
+    # The gateway's unauthenticated health endpoint: the readiness of
+    # the S3 API consumers dial on port 8333. The root path answers
+    # 403 to unauthenticated requests, so the check targets /healthz;
+    # 127.0.0.1 avoids the IPv6-first name resolution that leaves
+    # `localhost` unreachable inside the container.
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8888"]
-      start_period: 10s
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
+      start_period: 5s
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+# The datastore's own provisioning recipe: the deploy platform
+# executes it generically inside the running container to create one
+# consumer's bucket — no engine is special-cased in any binary. The
+# `access_key_env` and `secret_key_env` fields name the identity pair
+# the instance receives in its environment at creation (the gateway's
+# documented env-based identity seeding); the same values flow to the
+# consumer through its link's access_key/secret_key mappings. The
+# interactive administrative shell runs its commands from standard
+# input and defaults its master to `localhost:9333` — the all-in-one
+# server layout this manifest deploys with; `s3.bucket.create` is the
+# shell's documented bucket command
+# (https://github.com/seaweedfs/seaweedfs/wiki/weed-shell). The
+# instance's boot-time auto-create serves exactly one consumer;
+# per-consumer buckets are created through this recipe.
+provisioning:
+  kind: object_storage
+  access_key_env: AWS_ACCESS_KEY_ID
+  secret_key_env: AWS_SECRET_ACCESS_KEY
+  exec: ["sh", "-c", "weed shell -master=localhost:9333"]
+  script: "s3.bucket.create -name {bucket}\n"

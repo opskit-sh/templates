@@ -83,6 +83,89 @@ containers), `tools` (CLIs shipped by the image, run inside the
 container as a non-root user), and `actions` (curated tool invocations
 exposed to the operator).
 
+## Authoring a datastore template's provisioning recipe
+
+A datastore template — a template other deployments bind through
+their `links` — declares its own `provisioning:` block: the recipe
+the deploy platform executes inside the datastore's running container
+to create one consumer's logical entities. The platform runs the
+declared recipe generically; nothing about your datastore engine
+ships inside the CLI binaries, so the recipe is where your engine's
+own administrative knowledge lives.
+
+```yaml
+provisioning:
+  # What the recipe provisions. `relational` recipes create a
+  # consumer's logical database and login user; `object_storage`
+  # recipes create a per-consumer bucket.
+  kind: relational
+  # The command the platform runs inside the datastore's running
+  # container, through `docker compose exec -T`. Entries may
+  # reference the container's environment — its own shell expands
+  # them there — so the datastore's superuser credential never
+  # appears in any process argv: pass the variable NAME and expand
+  # it in the command, or read it in the script's tool.
+  exec: ["sh", "-c", "admin-cli --stdio --password-file \"$ADMIN_PASSWORD_FILE\""]
+  # The text piped to that command's standard input. The platform
+  # substitutes the closed placeholder set — nothing else:
+  #   {database}  the consumer's logical database name
+  #   {user}      the consumer's login user name
+  #   {password}  a freshly generated login credential for the user
+  #   {bucket}    the consumer's derived bucket name
+  # The script must contain no `$` and no other brace expression:
+  # the generated credential rides this text on standard input, so
+  # it never appears in any argv, log, or record.
+  script: |
+    create-login "{user}" with-password '{password}';
+    create-logical "{database}";
+```
+
+Authoring rules of thumb:
+
+- **Make the recipe idempotent.** Deploy re-runs it on every bind;
+  create-if-absent forms and re-issuable password statements keep
+  re-binding safe. A relational recipe should end with the login
+  password set to the freshly generated `{password}`, so a re-bind
+  rotates the credential the consumer's environment splices.
+- **Scope what the recipe grants.** A shared instance serves many
+  consumers: create the login user so it reaches the one logical
+  database named `{database}` and nothing else.
+- **Keep secrets out of argv.** The `exec` entries may carry `$`
+  because the container's own shell expands them there; the host-side
+  argv carries variable names only. The generated `{password}` rides
+  the `script` text on standard input — never put it in `exec`.
+- **Object-storage recipes** also name the two environment entries
+  the instance's generated identity pair lands in
+  (`access_key_env` / `secret_key_env`); the same values flow to the
+  consumer through its link's `access_key`/`secret_key` mappings.
+  The bucket name substitutes as `{bucket}`, hyphenated the way S3
+  naming rules require. The identity names must be uppercase
+  environment-variable shaped and must not name any `env` entry the
+  template itself declares — the datastore's own secrets are not the
+  consumer identity.
+- **Declare the recipe on a single-service, datastore-class
+  template.** The recipe runs inside the one service the manifest
+  declares; a `datastore`- or `storage`-category template with
+  exactly one service is the shape that carries one.
+
+An object-storage recipe:
+
+```yaml
+provisioning:
+  kind: object_storage
+  access_key_env: STORE_ACCESS_KEY
+  secret_key_env: STORE_SECRET_KEY
+  exec: ["sh", "-c", "store-shell"]
+  script: 'make-bucket {bucket}'
+```
+
+A consumer's relational or object_storage link whose bound template
+declares no recipe of the matching kind is refused at deploy
+pre-flight — the refusal names the link and the template, so the
+catalog gate is: ship the recipe with the datastore it provisions.
+The block is deploy-time contract: it is never rendered into
+`compose.yml` or the deployment record.
+
 ## Schema reference and worked examples
 
 - The schema reference is
@@ -91,14 +174,20 @@ exposed to the operator).
 - The worked examples are the round-trip fixtures in the CLI
   repository under
   [tests/fixtures/roundtrip/](https://github.com/opskit-sh/opskit/tree/main/tests/fixtures/roundtrip):
-  `postgres/template.yaml` is the stackless shape (a single service
-  and one secret), and `wordpress/template.yaml` is the stacks shape
-  (two runtime variants of one template) together with links,
+  `postgres/template.yaml` is the stackless shape (a single service,
+  one secret, and a declared provisioning recipe — the same bytes the
+  registry publishes), and `wordpress/template.yaml` is the stacks
+  shape (two runtime variants of one template) together with links,
   hostpaths, tools, actions, and a typed env entry.
 
-The validator shipped in the CLI is the gate: a manifest that the
-current `opskit` build rejects at deploy pre-flight will not be
-merged. Validate against the CLI you use, not against memory.
+The validator shipped in the CLI is the schema gate. This
+repository's CI parses every YAML file — it does not run the
+validator. The CLI repository's own CI validates its own round-trip
+fixtures, not this repository's manifests: every manifest here is
+validated with the shipped `opskit` build in maintainer review,
+before merge. A registry CI job that invokes the published validator
+on every manifest lands with the first release. Until then: validate
+against the CLI you use, not against memory.
 
 ## Catalog gates
 

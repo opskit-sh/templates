@@ -21,6 +21,45 @@ services:
       timeout: 5s
       retries: 10
 
+# The datastore's own provisioning recipe: the deploy platform
+# executes it generically inside the running container to create one
+# consumer's logical database and login user — no engine is
+# special-cased in any binary. The command runs in the container's
+# own shell, so its entries may reference the container's
+# environment: `PGPASSWORD` is the documented libpq environment
+# variable for the connection password
+# (https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-ENVVAR),
+# and `-v ON_ERROR_STOP=1` stops the script at the first failing
+# statement so a refused grant never reads as success
+# (https://www.postgresql.org/docs/current/app-psql.html). `postgres`
+# is the superuser the official image creates by default
+# (https://hub.docker.com/_/postgres). The generated consumer
+# credential rides the script over standard input — the argv carries
+# variable names only, never values.
+provisioning:
+  kind: relational
+  exec: ["sh", "-c", "PGPASSWORD=\"$POSTGRES_PASSWORD\" psql -v ON_ERROR_STOP=1 -U postgres -d postgres"]
+  # The create-if-absent steps use `\gexec` — the documented psql
+  # meta-command that executes each row the current query returns as a
+  # statement, so the create runs exactly when the entity is absent
+  # (https://www.postgresql.org/docs/current/app-psql.html);
+  # `CREATE DATABASE` cannot run inside a transaction block, and
+  # `\gexec` executes the generated statement outside one. The
+  # `ALTER ROLE` re-issues on every deploy, resetting the login
+  # password to the freshly generated value — re-binding is idempotent
+  # by construction. Scoped grants: the consumer's database revokes
+  # `PUBLIC` connect and grants it to the login user alone, so one
+  # shared instance's tenants cannot reach each other's data.
+  # Identifiers are double-quoted per the lexical rules
+  # (https://www.postgresql.org/docs/current/sql-syntax-lexical.html).
+  script: |
+    SELECT 'CREATE ROLE "{user}"' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{user}')\gexec
+    ALTER ROLE "{user}" WITH LOGIN PASSWORD '{password}';
+    SELECT 'CREATE DATABASE "{database}" OWNER "{user}"' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{database}')\gexec
+    REVOKE CONNECT ON DATABASE "{database}" FROM PUBLIC;
+    GRANT CONNECT ON DATABASE "{database}" TO "{user}";
+    GRANT ALL ON SCHEMA public TO "{user}";
+
 env:
   POSTGRES_PASSWORD:
     description: "Superuser password."

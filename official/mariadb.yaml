@@ -22,6 +22,38 @@ services:
       timeout: 5s
       retries: 10
 
+# The datastore's own provisioning recipe: the deploy platform
+# executes it generically inside the running container to create one
+# consumer's logical database and login user — no engine is
+# special-cased in any binary. `MYSQL_PWD` is the documented client
+# environment variable for the password
+# (https://mariadb.com/kb/en/environment-variables-mariadb-installed-from-source/):
+# the container's shell expands the root password the image documented
+# (`MARIADB_ROOT_PASSWORD`, https://hub.docker.com/_/mariadb), keeping
+# the value out of every process argv — host and container alike. The
+# generated consumer credential rides the script over standard input —
+# the argv carries the variable name only, never a value. The `%` host
+# is the wildcard consumers connect from; backticks quote identifiers
+# per the MariaDB lexical rules
+# (https://mariadb.com/kb/en/identifier-names/).
+provisioning:
+  kind: relational
+  exec: ["sh", "-c", "MYSQL_PWD=\"$MARIADB_ROOT_PASSWORD\" mariadb -u root"]
+  # `CREATE USER IF NOT EXISTS` and `CREATE DATABASE IF NOT EXISTS`
+  # are the documented idempotent creates; `ALTER USER ... IDENTIFIED
+  # BY` re-issues the freshly generated password on every deploy; the
+  # grant is scoped to the consumer's own database, which is the
+  # isolation one shared instance's tenants hold each other to — a
+  # fresh login user carries no other privileges
+  # (https://mariadb.com/kb/en/create-user/,
+  # https://mariadb.com/kb/en/alter-user/,
+  # https://mariadb.com/kb/en/grant/).
+  script: |
+    CREATE USER IF NOT EXISTS '{user}'@'%' IDENTIFIED BY '{password}';
+    ALTER USER '{user}'@'%' IDENTIFIED BY '{password}';
+    CREATE DATABASE IF NOT EXISTS `{database}`;
+    GRANT ALL PRIVILEGES ON `{database}`.* TO '{user}'@'%';
+
 env:
   MARIADB_ROOT_PASSWORD:
     description: "Root account password."
