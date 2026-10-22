@@ -53,6 +53,24 @@ provisioning:
     ALTER USER '{user}'@'%' IDENTIFIED BY '{password}';
     CREATE DATABASE IF NOT EXISTS `{database}`;
     GRANT ALL PRIVILEGES ON `{database}`.* TO '{user}'@'%';
+  # The drop recipe: the platform's own way of removing one consumer's
+  # logical entities again — its logical database and its login user,
+  # and never another consumer's. The drop is declared beside the
+  # create because the two differ by dialect and by dependency order:
+  # the login user holds the grants on the logical database, so the
+  # database goes first
+  # (https://mariadb.com/kb/en/drop-database/). `IF EXISTS` makes the
+  # drop idempotent — a second delete of the same consumer finds
+  # nothing and reports a note instead of failing — and the account is
+  # named in the same `'user'@'host'` form the create uses
+  # (https://mariadb.com/kb/en/drop-user/). The identifiers are
+  # backtick-quoted per the MariaDB lexical rules
+  # (https://mariadb.com/kb/en/identifier-names/).
+  drop:
+    exec: ["sh", "-c", "MYSQL_PWD=\"$MARIADB_ROOT_PASSWORD\" mariadb -u root"]
+    script: |
+      DROP DATABASE IF EXISTS `{database}`;
+      DROP USER IF EXISTS '{user}'@'%';
 
 env:
   MARIADB_ROOT_PASSWORD:

@@ -59,6 +59,31 @@ provisioning:
     REVOKE CONNECT ON DATABASE "{database}" FROM PUBLIC;
     GRANT CONNECT ON DATABASE "{database}" TO "{user}";
     GRANT ALL ON SCHEMA public TO "{user}";
+  # The drop recipe: the platform's own way of removing one
+  # consumer's logical entities again — its logical database and its
+  # login user, and never another consumer's. The drop is declared
+  # beside the create because the two differ by dialect and by
+  # dependency order: the login user owns the logical database, so the
+  # database goes first, and a role that still holds privileges cannot
+  # be removed — `DROP OWNED BY` is the documented way to take the
+  # privileges and the objects away first
+  # (https://www.postgresql.org/docs/current/sql-dropowned.html,
+  # https://www.postgresql.org/docs/current/sql-droprole.html).
+  # `WITH (FORCE)` is the documented form that terminates the sessions
+  # still attached to the database, so a consumer that is still
+  # connected does not keep its database alive
+  # (https://www.postgresql.org/docs/current/sql-dropdatabase.html);
+  # `IF EXISTS` and the `\gexec` guard make the drop idempotent, so a
+  # second delete of the same consumer finds nothing and reports a
+  # notice instead of failing. The identifiers are double-quoted per
+  # the lexical rules
+  # (https://www.postgresql.org/docs/current/sql-syntax-lexical.html).
+  drop:
+    exec: ["sh", "-c", "PGPASSWORD=\"$POSTGRES_PASSWORD\" psql -v ON_ERROR_STOP=1 -U postgres -d postgres"]
+    script: |
+      DROP DATABASE IF EXISTS "{database}" WITH (FORCE);
+      SELECT 'DROP OWNED BY "{user}"' WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = '{user}')\gexec
+      SELECT 'DROP ROLE "{user}"' WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = '{user}')\gexec
 
 env:
   POSTGRES_PASSWORD:

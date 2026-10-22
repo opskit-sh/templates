@@ -226,6 +226,69 @@ Authoring rules of thumb:
 The block is deploy-time contract: it is never rendered into
 `compose.yml` or the deployment record.
 
+## Authoring a datastore template's drop recipe
+
+A datastore template that provisions entities also declares its own
+`drop:` recipe, inside the `provisioning:` block: the command the
+platform executes inside the datastore's running container to remove
+one consumer's logical entities again — its logical database and its
+login user. The platform runs the declared recipe generically, the way
+it runs the provisioning and the dump recipes; your engine's own
+drop commands and their own flags live in the template, never in the
+CLI binaries.
+
+```yaml
+provisioning:
+  kind: relational
+  exec: ["sh", "-c", "admin-cli --stdio"]
+  script: |
+    create-login "{user}" with-password '{password}';
+    create-logical "{database}";
+  # The drop recipe: the same closed placeholder set as the create
+  # recipe — {database}, {user}, {password}, {bucket} — and the same
+  # no-dollar rule for the script.
+  drop:
+    # The command the platform runs inside the datastore's running
+    # container, through `docker compose exec -T`.
+    exec: ["sh", "-c", "admin-cli --drop --database {database} --user {user}"]
+    # The text piped to that command's standard input — optional. It
+    # carries the same closed placeholder set and no `$`.
+    script: |
+      drop-logical "{database}";
+      drop-login "{user}";
+```
+
+Authoring rules of thumb:
+
+- **Drop one consumer's entities, never the instance.** The recipe
+  targets the consumer's own database and its own login user: a shared
+  instance serves many consumers, and the decommissioning of one must
+  never touch the others.
+- **The drop is not the create, reversed.** The two differ by dialect
+  and by dependency order — the login user usually owns the logical
+  database, so the database goes first — and the platform never
+  derives one from the other. Declare the drop you mean.
+- **Make the drop idempotent.** A decommissioning may run twice — a
+  failed one, then a retry — so the recipe must tolerate entities
+  that are already gone: the shipped recipes use the engine's own
+  "if exists" forms and their own conditional forms.
+- **Cite the upstream documentation.** The command's name, its flags,
+  and its behavior come from your engine's own documentation — link it
+  in the manifest's comments, the way the shipped recipes do, so a
+  reviewer can check the recipe against its source.
+- **Declare the recipe on a single-service, datastore-class
+  template**, exactly like the provisioning and the dump recipes: the
+  commands run inside the one service the manifest declares.
+
+A datastore template that provisions entities and declares no drop
+recipe cannot be decommissioned cleanly: the platform refuses the
+delete rather than leave the consumer's logical entities behind, so
+the catalog gate is: ship the drop recipe with the datastore it
+provisions.
+
+The block is deploy-time contract: it is never rendered into
+`compose.yml` or the deployment record.
+
 ## Schema reference and worked examples
 
 - The schema reference is
