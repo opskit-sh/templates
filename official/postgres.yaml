@@ -66,3 +66,32 @@ env:
     type: secret
     generate: random_base64_64
     required: true
+
+# The datastore's own dump recipe: the platform executes it generically
+# inside the running container to take one consumer's logical database
+# out — and to import one back. The dump is written to a file inside
+# the container and copied out byte-exactly with the engine's own
+# copy-out command, so a binary archive never travels through a text
+# channel. The postgres image ships the client tools beside the server
+# (https://hub.docker.com/_/postgres), so `pg_dump` and `pg_restore`
+# are already in the image.
+#
+# `-Fc` is the documented custom archive format, and `--no-owner` and
+# `--no-privileges` keep the archive free of the ownership and the
+# access-control statements, so the same archive restores into a
+# different logical database under a different owner
+# (https://www.postgresql.org/docs/current/app-pgdump.html). The
+# restore counterpart takes the same two flags, and `--exit-on-error`
+# stops at the first failing statement instead of continuing and
+# reporting a count of errors at the end
+# (https://www.postgresql.org/docs/current/app-pgrestore.html). The
+# grants that follow the import give the consumer's own login user the
+# privileges the imported objects need: the archive carries no owner,
+# so the objects arrive owned by the superuser that restored them.
+dump:
+  exec: ["sh", "-c", "PGPASSWORD=\"$POSTGRES_PASSWORD\" pg_dump -Fc --no-owner --no-privileges -U postgres -d {database} -f /tmp/opskit-dump.dump"]
+  restore_exec: ["sh", "-c", "PGPASSWORD=\"$POSTGRES_PASSWORD\" pg_restore --no-owner --no-privileges --exit-on-error -U postgres -d {database} /tmp/opskit-dump.dump && PGPASSWORD=\"$POSTGRES_PASSWORD\" psql -v ON_ERROR_STOP=1 -U postgres -d {database} -f -"]
+  restore_script: |
+    GRANT ALL ON SCHEMA public TO "{user}";
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO "{user}";
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "{user}";

@@ -60,3 +60,31 @@ env:
     type: secret
     generate: random_base64_64
     required: true
+
+# The datastore's own dump recipe: the platform executes it generically
+# inside the running container to take one consumer's logical database
+# out — and to import one back. The dump is written to a file inside
+# the container and copied out byte-exactly with the engine's own
+# copy-out command, so the archive never travels through a text
+# channel. The mariadb image ships the client tools beside the server
+# (https://hub.docker.com/_/mariadb); the dump tool is `mariadb-dump`,
+# and the `mysqldump` spelling was removed from the image in MariaDB
+# 11.0 (https://mariadb.com/kb/en/mariadb-dump/).
+#
+# The dump names one database and not `--databases`, so the archive
+# carries no `CREATE DATABASE` and no `USE`: it restores into the
+# logical database the platform names, never into the one it was taken
+# from. `--single-transaction` takes a consistent snapshot of the
+# transactional tables without blocking the workload, `--quick` reads
+# the rows one at a time instead of buffering a table in memory, and
+# `--routines` and `--events` carry the stored routines and the events,
+# which are not part of a table definition
+# (https://mariadb.com/kb/en/mariadb-dump/). The restore counterpart
+# reloads the dump into the named database and then applies the grants
+# the consumer's own login user needs: the archive carries no owner, so
+# the objects arrive owned by the account that imported them.
+dump:
+  exec: ["sh", "-c", "MYSQL_PWD=\"$MARIADB_ROOT_PASSWORD\" mariadb-dump --single-transaction --quick --routines --events --no-tablespaces {database} > /tmp/opskit-dump.dump"]
+  restore_exec: ["sh", "-c", "MYSQL_PWD=\"$MARIADB_ROOT_PASSWORD\" mariadb -u root {database} < /tmp/opskit-dump.dump && MYSQL_PWD=\"$MARIADB_ROOT_PASSWORD\" mariadb -u root {database}"]
+  restore_script: |
+    GRANT ALL PRIVILEGES ON `{database}`.* TO '{user}'@'%';

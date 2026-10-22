@@ -166,6 +166,66 @@ catalog gate is: ship the recipe with the datastore it provisions.
 The block is deploy-time contract: it is never rendered into
 `compose.yml` or the deployment record.
 
+## Authoring a datastore template's dump recipe
+
+A datastore template that can be backed up also declares its own
+`dump:` block: the recipe the platform executes inside the datastore's
+running container to take one consumer's logical database out — and to
+import one back. As with the provisioning recipe, the platform runs the
+declared recipe generically; your engine's own dump tool, its own
+flags, and its own restore counterpart live in the template, never in
+the CLI binaries.
+
+```yaml
+dump:
+  # The command the platform runs inside the datastore's running
+  # container to write the dump. It must write the dump to the file
+  # /tmp/opskit-dump.dump — the platform's staging path — and the
+  # platform copies that file out of the container with the engine's
+  # own copy-out command, so the bytes arrive exactly as your tool
+  # wrote them. A binary archive must never travel through a text
+  # channel.
+  #
+  # The platform substitutes the closed placeholder set — nothing else:
+  #   {database}  the consumer's logical database name
+  #   {user}      the consumer's login user name
+  #   {password}  the consumer's generated login credential
+  # The entries may reference the container's environment — its own
+  # shell expands them there — so the datastore's superuser credential
+  # never appears in any process argv.
+  exec: ["sh", "-c", "engine-dump --database {database} --file /tmp/opskit-dump.dump"]
+  # The import counterpart: the command that loads a dump back into the
+  # logical database the platform names. The platform copies the
+  # archived dump into the container at /tmp/opskit-dump.dump before it
+  # runs this command.
+  restore_exec: ["sh", "-c", "engine-restore --database {database} --file /tmp/opskit-dump.dump"]
+  # The text piped to the restore command's standard input — optional.
+  # It carries the same closed placeholder set and no `$`.
+  restore_script: |
+    grant-all-to "{user}";
+```
+
+Authoring rules of thumb:
+
+- **Dump one logical database, never the instance.** The recipe
+  targets the consumer's own database: a shared instance serves many
+  consumers, and the backup of one must never read — or drop — the
+  others.
+- **Keep the archive owner-free.** An archive that carries ownership
+  and access-control statements restores into one database under one
+  owner; an archive without them restores into any database. Grant the
+  consumer's user what it needs in the restore step instead.
+- **Cite the upstream documentation.** The tool's name, its flags, and
+  its behavior come from your engine's own documentation — link it in
+  the manifest's comments, the way the shipped recipes do, so a
+  reviewer can check the recipe against its source.
+- **Declare the recipe on a single-service, datastore-class
+  template**, exactly like the provisioning recipe: the commands run
+  inside the one service the manifest declares.
+
+The block is deploy-time contract: it is never rendered into
+`compose.yml` or the deployment record.
+
 ## Schema reference and worked examples
 
 - The schema reference is
